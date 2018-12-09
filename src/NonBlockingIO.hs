@@ -15,8 +15,27 @@ getUrl url = do
   res <- httpLbs req manager
   return $ (B.take 100 . responseBody) res
 
-main :: IO ()
-main = do
+data Async a =
+  Async (MVar a)
+
+async :: IO a -> IO (Async a)
+async action = do
+  mv <- newEmptyMVar
+  _ <- (forkIO $ action >>= (putMVar mv)) >>= traceThread
+  return $ Async mv
+
+traceThread :: ThreadId -> IO ThreadId
+traceThread a = trace (show a) (return a)
+
+-- Must rewrap to avoid deadlocks and provide the value to other consumers
+wait :: Async a -> IO a
+wait (Async mv) = do
+  v <- takeMVar mv
+  _ <- putMVar mv v
+  return v
+
+mainLowLevel :: IO ()
+mainLowLevel = do
   m1 <- newEmptyMVar
   m2 <- newEmptyMVar
   _ <-
@@ -27,4 +46,12 @@ main = do
     forkIO $ (getUrl "https://www.github.com") >>= trace "GitHub" (putMVar m2)
   r1 <- trace "m1 evaluated" (takeMVar m1)
   r2 <- trace "m2 evaluated" (takeMVar m2)
+  putStrLn "Finished"
+
+mainAsync :: IO ()
+mainAsync = do
+  a1 <- async $ getUrl "https://www.gitlab.com"
+  a2 <- async $ getUrl "https://www.github.com"
+  m1 <- wait a1
+  m2 <- wait a2
   putStrLn "Finished"

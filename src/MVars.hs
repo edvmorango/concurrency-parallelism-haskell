@@ -5,7 +5,7 @@ import qualified Data.Map as M
 
 -- newEmptyMVar :: IO (MVar a)
 -- newMVar :: a -> IO (MVar a)
--- takeMVar :: MVar a -> a
+-- takeMVar :: MVar a -> IO a
 -- putMVar :: MVar a -> a -> IO ()
 mvarEG = do
   m <- newEmptyMVar
