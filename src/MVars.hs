@@ -130,3 +130,54 @@ phoneBookConcurrentMain = do
   _ <- peekPhone s "name1"
   _ <- threadDelay (10 ^ 6 * 10000)
   putStrLn "Finished"
+
+-- Channel
+data Channel a =
+  Channel (MVar (Stream a))
+          (MVar (Stream a))
+
+type Stream a = MVar (Item a)
+
+data Item a =
+  Item a
+       (Stream a)
+
+newChan :: IO (Channel a)
+newChan = do
+  hole <- newEmptyMVar
+  reader <- newMVar hole
+  writer <- newMVar hole
+  return (Channel reader writer)
+
+writeChan :: Channel a -> a -> IO ()
+writeChan (Channel _ writer) val = do
+  newEndHole <- newEmptyMVar
+  currentEndHole <- takeMVar writer
+  _ <- putMVar currentEndHole (Item val newEndHole)
+  putMVar writer newEndHole
+
+readChan :: Channel a -> IO a
+readChan (Channel reader _) = do
+  stream <- takeMVar reader
+  (Item a next) <- readMVar' stream
+  _ <- putMVar reader next
+  return a
+
+readMVar' :: MVar a -> IO a
+readMVar' a = do
+  val <- takeMVar a
+  _ <- putMVar a val
+  return val
+
+dupChan :: Channel a -> IO (Channel a)
+dupChan (Channel _ writer) = do
+  hole <- readMVar' writer
+  newReader <- newMVar hole
+  return (Channel newReader writer)
+
+unGetChan :: Channel a -> a -> IO ()
+unGetChan (Channel reader _) val = do
+  newReadEnd <- newEmptyMVar
+  readEnd <- takeMVar reader
+  _ <- putMVar newReadEnd (Item val readEnd)
+  putMVar reader newReadEnd
