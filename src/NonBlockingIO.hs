@@ -7,6 +7,8 @@ import qualified Data.ByteString.Lazy as B
 import Debug.Trace
 import Network.HTTP.Client
 import Network.HTTP.Client.TLS
+import System.TimeIt
+import Text.Printf
 
 getUrl :: String -> IO B.ByteString
 getUrl url = do
@@ -55,3 +57,16 @@ mainAsync = do
   m1 <- wait a1
   m2 <- wait a2
   putStrLn "Finished"
+
+urls :: [String]
+urls =
+  ["https://www.gitlab.com", "https://www.github.com", "https://bitbucket.com"]
+
+urlsTime :: String -> IO ()
+urlsTime url = do
+  (time) <- timeIt $ getUrl url
+  putStrLn $ "Page: " ++ url
+
+mainUrls = do
+  as <- mapM (async . urlsTime) urls
+  mapM_ wait as
