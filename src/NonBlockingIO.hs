@@ -3,7 +3,9 @@
 module NonBlockingIO where
 
 import Control.Concurrent
+import Control.Exception
 import qualified Data.ByteString.Lazy as B
+import Data.Typeable
 import Debug.Trace
 import Network.HTTP.Client
 import Network.HTTP.Client.TLS
@@ -18,23 +20,27 @@ getUrl url = do
   return $ (B.take 100 . responseBody) res
 
 data Async a =
-  Async (MVar a)
+  Async (MVar (Either SomeException a))
 
 async :: IO a -> IO (Async a)
 async action = do
   mv <- newEmptyMVar
-  _ <- (forkIO $ action >>= (putMVar mv)) >>= traceThread
+  _ <- (forkIO $ (try action) >>= (putMVar mv)) >>= traceThread
   return $ Async mv
 
 traceThread :: ThreadId -> IO ThreadId
 traceThread a = trace (show a) (return a)
 
+waitCatch :: Async a -> IO (Either SomeException a)
+waitCatch (Async var) = readMVar var
+
 -- Must rewrap to avoid deadlocks and provide the value to other consumers
 wait :: Async a -> IO a
-wait (Async mv) = do
-  v <- takeMVar mv
-  _ <- putMVar mv v
-  return v
+wait a = do
+  v <- waitCatch a
+  case v of
+    Left e -> throwIO e
+    Right a -> return a
 
 mainLowLevel :: IO ()
 mainLowLevel = do
@@ -53,6 +59,14 @@ mainLowLevel = do
 mainAsync :: IO ()
 mainAsync = do
   a1 <- async $ getUrl "https://www.gitlab.com"
+  a2 <- async $ getUrl "https://www.github.com"
+  m1 <- wait a1
+  m2 <- wait a2
+  putStrLn "Finished"
+
+mainAsyncFail :: IO ()
+mainAsyncFail = do
+  a1 <- async $ getUrl "https://www.gitlab.comm"
   a2 <- async $ getUrl "https://www.github.com"
   m1 <- wait a1
   m2 <- wait a2
