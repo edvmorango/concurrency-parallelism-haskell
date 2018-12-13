@@ -90,7 +90,7 @@ mainUrls = do
   as <- mapM (async . urlsTime) urls
   mapM_ wait as
 
--- replicates repeats a action and discards his value n times
+-- replicateM_ repeats a action and discards his value n times
 -- in that cases his use is to clean the MVAR
 mainMerge :: IO ()
 mainMerge = do
@@ -100,3 +100,19 @@ mainMerge = do
   (url, r) <- takeMVar m
   _ <- putStrLn $ "The first was: " ++ url
   replicateM_ ((length urls) - 1) (takeMVar m)
+
+waitEither :: Async a -> Async b -> IO (Either a b)
+waitEither a b = do
+  m <- newEmptyMVar
+  _ <- forkIO $ try (Left <$> (wait a)) >>= (putMVar m)
+  _ <- forkIO $ try (Right <$> (wait b)) >>= (putMVar m)
+  wait (Async m)
+
+mainMergeEither :: IO ()
+mainMergeEither = do
+  a <- async $ getUrl "https://www.gitlab.com"
+  b <- async $ getUrl "https://www.github.com"
+  res <- waitEither a b
+  case res of
+    Left _ -> putStrLn "Gitlab"
+    Right _ -> putStrLn "Github"
