@@ -4,6 +4,7 @@ module NonBlockingIO where
 
 import Control.Concurrent
 import Control.Exception
+import Control.Monad
 import qualified Data.ByteString.Lazy as B
 import Data.Typeable
 import Debug.Trace
@@ -74,7 +75,11 @@ mainAsyncFail = do
 
 urls :: [String]
 urls =
-  ["https://www.gitlab.com", "https://www.github.com", "https://bitbucket.com"]
+  [ "https://www.gitlab.com"
+  , "https://www.github.com"
+  , "https://bitbucket.com"
+  , "https://coding.net/git"
+  ]
 
 urlsTime :: String -> IO ()
 urlsTime url = do
@@ -84,3 +89,14 @@ urlsTime url = do
 mainUrls = do
   as <- mapM (async . urlsTime) urls
   mapM_ wait as
+
+-- replicates repeats a action and discards his value n times
+-- in that cases his use is to clean the MVAR
+mainMerge :: IO ()
+mainMerge = do
+  m <- newEmptyMVar
+  let download url = getUrl url >>= \res -> putMVar m (url, res)
+  _ <- mapM_ (forkIO . download) urls
+  (url, r) <- takeMVar m
+  _ <- putStrLn $ "The first was: " ++ url
+  replicateM_ ((length urls) - 1) (takeMVar m)
