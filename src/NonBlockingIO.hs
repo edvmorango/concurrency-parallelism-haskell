@@ -116,3 +116,16 @@ mainMergeEither = do
   case res of
     Left _ -> putStrLn "Gitlab"
     Right _ -> putStrLn "Github"
+
+waitAny :: [Async a] -> IO a
+waitAny as = do
+  m <- newEmptyMVar
+  let f a = forkIO $ try (wait a) >>= (putMVar m)
+  _ <- mapM_ (f) as
+  wait (Async m)
+
+mainWaitAny :: IO ()
+mainWaitAny = do
+  as <- mapM (async . getUrl) urls
+  a <- waitAny as
+  putStrLn $ "Res: " ++ (show a)
